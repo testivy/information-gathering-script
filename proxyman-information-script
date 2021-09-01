@@ -1,0 +1,85 @@
+// Addons List: https://docs.proxyman.io/scripting/addons
+const {
+  sayHello
+} = require("@addons/HelloWorld.js");
+
+///
+/// This func is called if the Request Checkbox is Enabled
+/// You can manipulate the Request Data here before the request hits on the server
+/// Ex: Add/Update/Remove: host, schema, port, path, headers, queries and body (json, form, plain-text, base64 encoded string...)
+/// Use console.log(request) to see all available fields
+/// You can import a JSON file and use in the script. Action Menu -> Import File
+/// Use global object `sharedState` to share data between onRequest and onResponse. Ex: sharedState.data = "My-Data"
+///
+function onRequest(context, url, request) {
+  
+  return request;
+}
+
+///
+/// This func is called if the Response Checkbox is Enabled
+/// You can manipulate the Response Data here before it goes to the client
+/// Ex: Add/Update/Remove: headers, statusCode and body (json, plain-text, base64 encoded string)
+/// Use console.log(response) to see all available fields
+///
+function onResponse(context, url, request, response) {
+
+  if (response.body == undefined) {
+
+   
+    return response;
+
+  }
+  let response_body = response.body;
+
+
+  if (response.headers['Content-Type'] != undefined && response.headers['Content-Type'].search("application/json") != -1) {
+
+    response_body2string = JSON.stringify(response_body)
+  } else {
+
+    response_body2string = response_body.toString();
+  }
+
+  let path_reg = /("|')(\/[0-9a-zA-Z.]).*?("|')|(["|'](\/v[1-9].*?)")|(["|'](\/api.*?)")/g;
+  let phone_reg = /(13[0-9]|14[5|7]|15[^4]|17[6-9]|18[0-9])\d{8}/g;
+  let IDCard_reg = /\d{6}(18|19|20)?\d{2}(0[1-9]|1[12])(0[1-9]|[12]\d|3[01])\d{3}(\d|X)/g;
+
+  var interface = response_body2string.match(path_reg);
+  var phone = response_body2string.match(phone_reg);
+  var IDCard = response_body2string.match(IDCard_reg);
+
+  //接口去重
+  var interface_no_duplicate = [...new Set(interface)];
+
+  //手机号去重
+  var phone_no_duplicate = [...new Set(phone)];
+
+  // 身份证去重
+  var IDCard_no_duplicate = [...new Set(IDCard)];
+
+  if (interface_no_duplicate.length > 2) {
+    var host_reg = /^http(s)?:\/\/(.*?)\//;
+    let host_from_referer = host_reg.exec(request.headers["Referer"]);
+    // red, blue, yellow, purple, gray, green 
+    response.color = "yellow";
+    writeToFile(interface_no_duplicate.toString().replaceAll(",", "\r\n"), "~/Desktop/sample/" + host_from_referer[2] + context.flow.id + ".txt");
+    response.comment = "---interface information list--- " + interface_no_duplicate.length + " counts\r\n" + interface_no_duplicate.toString().replaceAll(",", "\r\n");
+  } else if (phone_no_duplicate.length > 0) {
+    response.color = "red";
+    response.comment = "----privacy information---" + "\r\n";
+    response.comment += "\r\n *phone Number detected: \n"
+    response.comment += phone_no_duplicate.toString();
+    response.comment += "\n"
+
+  } else if (IDCard_no_duplicate.length > 0) {
+    response.color = "red";
+    response.comment = "---privacy information---" + "\r\n";
+    response.comment += "\r\n *IDCard Number detected: \n"
+    response.comment += IDCard_no_duplicate.toString();
+    response.comment += "\n"
+  }
+
+
+  return response;
+}
